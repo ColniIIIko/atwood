@@ -4,8 +4,8 @@ import { Application, Graphics } from 'pixi.js';
 import './style.css';
 
 const g = 9.81;
-const MASS_DEFAULT = 0.1; // grams
-const MASS_SMALL_DEFAULT = 0.05; // grams
+const MASS_DEFAULT = 0.1;
+const MASS_SMALL_DEFAULT = 0.001;
 
 // 1px == 0.1 meters
 
@@ -13,8 +13,12 @@ function acceleration(m1: number, m2: number) {
   return (m2 / (2 * m1 + m2)) * g;
 }
 
-function computeG(m1: number, m2: number, h: number, H: number, t: number) {
-  return ((2 * m1 + m2) * H * H) / (2 * m2 * h * t * t);
+function toMeters(n: number) {
+  return n * 0.0002645833;
+}
+
+function toPixels(n: number) {
+  return n * 3779.5275590551;
 }
 
 (async () => {
@@ -65,7 +69,7 @@ function computeG(m1: number, m2: number, h: number, H: number, t: number) {
         y: {
           title: {
             display: true,
-            text: 'v^2 (m^2/s^2)',
+            text: 'v^2 (sm^2/s^2)',
             color: 'white',
           },
           ticks: { color: 'white' },
@@ -157,41 +161,45 @@ function computeG(m1: number, m2: number, h: number, H: number, t: number) {
   let mass2 = MASS_SMALL_DEFAULT;
   let speed = 0;
   let h = 0;
-  let H = 0;
   let t = 0;
   let acc = acceleration(mass1, mass2);
 
   const mass1Span = document.querySelector<HTMLSpanElement>('#mass1')!;
   const mass2Span = document.querySelector<HTMLSpanElement>('#mass2')!;
 
-  const sP = document.querySelector<HTMLSpanElement>('#s')!;
-  const newG = document.querySelector<HTMLSpanElement>('#g')!;
-
   const startButton = document.querySelector<HTMLButtonElement>('#start-btn')!;
   startButton.addEventListener('click', () => {
     simulationRunning = !simulationRunning;
+
+    chart.data.labels = [];
+    chart.data.datasets[0].data = [];
+    chart.update();
   });
 
+  let counter = 0;
   const resetButton = document.querySelector<HTMLButtonElement>('#reset-btn')!;
   resetButton.addEventListener('click', () => {
     simulationRunning = false;
+    counter = 0;
 
     speed = 0;
-    H = 0;
     h = 0;
     t = 0;
     acc = acceleration(mass1, mass2);
-
-    sP.innerHTML = '0';
 
     drawWeight1(weight1, 0);
     drawWeight2(weight2, 0);
   });
 
+  const sP = document.querySelector<HTMLSpanElement>('#s')!;
+  const tP = document.querySelector<HTMLSpanElement>('#t')!;
+  const uP = document.querySelector<HTMLSpanElement>('#u')!;
+  const gp = document.querySelector<HTMLSpanElement>('#g')!;
+
   document
     .querySelector<HTMLInputElement>('#mass1-input')!
     .addEventListener('change', (e) => {
-      mass1 = Number((e.target as HTMLInputElement).value) / 10;
+      mass1 = Number((e.target as HTMLInputElement).value) / 100;
       mass1Span.textContent = `${mass1} g`;
 
       acc = acceleration(mass1, mass2);
@@ -200,43 +208,48 @@ function computeG(m1: number, m2: number, h: number, H: number, t: number) {
   document
     .querySelector<HTMLInputElement>('#mass2-input')!
     .addEventListener('change', (e) => {
-      mass2 = Number((e.target as HTMLInputElement).value) / 100;
+      mass2 = Number((e.target as HTMLInputElement).value) / 10000;
       mass2Span.textContent = `${mass2} g`;
 
       acc = acceleration(mass1, mass2);
     });
 
-  app.ticker.add(({ deltaTime }) => {
+  app.ticker.add(({ deltaMS }) => {
     if (simulationRunning) {
       if (weight2.getBounds().maxY > app.screen.height) {
         simulationRunning = false;
-
-        h = speed * speed / (2 * acc);
-
-        newG.innerHTML = `g: ${computeG(mass1, mass2, h, H, t)}`;
+        const g =
+          ((2 * mass1 + mass2) * speed * speed) / (2 * toMeters(h) * mass2);
+        gp.innerHTML = `
+        g = <div class="fraction">
+              <span class="fup">2 * (<var>M1</var> + <var>M2</var>) * <var>u <sup>2</sup></var></span>
+              <span class="bar">/</span>
+              <span class="fdn">2 * <var>h</var> * <var>M2</var></span>
+            </div> = ${g.toFixed(2)} m/<var>s<sup>2</sup></var>
+        `;
       }
 
-      t += deltaTime / app.ticker.FPS;
+      t += deltaMS;
 
-      speed = acc * t;
+      speed += (acc * deltaMS) / 1000;
 
-      const deltaY = speed * t;
-      H = deltaY;
-      sP.innerText = H.toFixed(2);
+      const deltaY = (speed * deltaMS) / 1000;
+      h += toPixels(deltaY);
 
-      drawWeight1(weight1, H);
-      drawWeight2(weight2, H);
+      sP.innerText = `s = ${toMeters(h).toFixed(4)} m`;
+      tP.innerText = `t = ${(t / 1000).toFixed(2)} s`;
+      uP.innerText = `u = ${speed.toFixed(4)} m/s`;
 
-      chart.data.labels?.push(H.toFixed(5)); // Add h to x-axis
-      chart.data.datasets[0].data.push((speed * speed).toFixed(2)); // Add v^2 to y-axis
-      chart.update();
+      drawWeight1(weight1, h);
+      drawWeight2(weight2, h);
+
+      counter += 1;
+
+      if (counter % 2 === 0) {
+        chart.data.labels?.push(toMeters(h).toFixed(5)); // Add h to x-axis
+        chart.data.datasets[0].data.push((speed * speed * 10000).toFixed(2)); // Add v^2 to y-axis
+        chart.update();
+      }
     }
   });
-
-  // Listen for animate update
-  // app.ticker.add((time) => {
-  //   // Continuously rotate the container!
-  //   // * use delta to create frame-independent transform *
-  //   container.rotation -= 0.01 * time.deltaTime;
-  // });
 })();
