@@ -1,14 +1,20 @@
+import Chart from 'chart.js/auto';
 import { Application, Graphics } from 'pixi.js';
+
 import './style.css';
 
 const g = 9.81;
 const MASS_DEFAULT = 0.1; // grams
-const MASS_SMALL_DEFAULT = 0.001; // grams
+const MASS_SMALL_DEFAULT = 0.05; // grams
 
 // 1px == 0.1 meters
 
 function acceleration(m1: number, m2: number) {
   return (m2 / (2 * m1 + m2)) * g;
+}
+
+function computeG(m1: number, m2: number, h: number, H: number, t: number) {
+  return ((2 * m1 + m2) * H * H) / (2 * m2 * h * t * t);
 }
 
 (async () => {
@@ -21,12 +27,58 @@ function acceleration(m1: number, m2: number) {
   await app.init({ background: '#ffffff', resizeTo: canvasWrapper });
   canvasWrapper.appendChild(app.canvas);
 
+  const chartCanvas = document.getElementById('chart') as HTMLCanvasElement;
+
+  const chart = new Chart(chartCanvas, {
+    type: 'line',
+    data: {
+      labels: [], // h values (x-axis)
+      datasets: [
+        {
+          label: 'v^2 vs h',
+          data: [], // v^2 values (y-axis)
+          borderColor: '#646cff',
+          backgroundColor: 'rgba(100, 108, 255, 0.2)',
+          tension: 0.1, // Smooth curve
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          display: true,
+          labels: {
+            color: 'white',
+          },
+        },
+      },
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: 'h (m)',
+            color: 'white',
+          },
+          ticks: { color: 'white' },
+        },
+        y: {
+          title: {
+            display: true,
+            text: 'v^2 (m^2/s^2)',
+            color: 'white',
+          },
+          ticks: { color: 'white' },
+        },
+      },
+    },
+  });
+
   const CIRCLE_CENTER_X = app.screen.width / 2;
   const CIRCLE_CENTER_Y = app.screen.height / 4;
   const CIRCLE_R = 80;
 
   const DEFAULT_DRAW_HEIGHT = 240; // px
-  const DEFAULT_MAX_HEIGHT = 720; // px
 
   const RECT_WIDTH = 60; // px
   const RECT_HEIGHT = 80; // px
@@ -105,7 +157,15 @@ function acceleration(m1: number, m2: number) {
   let mass2 = MASS_SMALL_DEFAULT;
   let speed = 0;
   let h = 0;
+  let H = 0;
+  let t = 0;
   let acc = acceleration(mass1, mass2);
+
+  const mass1Span = document.querySelector<HTMLSpanElement>('#mass1')!;
+  const mass2Span = document.querySelector<HTMLSpanElement>('#mass2')!;
+
+  const sP = document.querySelector<HTMLSpanElement>('#s')!;
+  const newG = document.querySelector<HTMLSpanElement>('#g')!;
 
   const startButton = document.querySelector<HTMLButtonElement>('#start-btn')!;
   startButton.addEventListener('click', () => {
@@ -117,22 +177,21 @@ function acceleration(m1: number, m2: number) {
     simulationRunning = false;
 
     speed = 0;
+    H = 0;
     h = 0;
+    t = 0;
     acc = acceleration(mass1, mass2);
+
+    sP.innerHTML = '0';
 
     drawWeight1(weight1, 0);
     drawWeight2(weight2, 0);
   });
 
-  const mass1Span = document.querySelector<HTMLSpanElement>('#mass1')!;
-  const mass2Span = document.querySelector<HTMLSpanElement>('#mass2')!;
-
-  const sP = document.querySelector<HTMLSpanElement>('#s')!;
-
   document
     .querySelector<HTMLInputElement>('#mass1-input')!
     .addEventListener('change', (e) => {
-      mass1 = Number((e.target as HTMLInputElement).value) / 100;
+      mass1 = Number((e.target as HTMLInputElement).value) / 10;
       mass1Span.textContent = `${mass1} g`;
 
       acc = acceleration(mass1, mass2);
@@ -141,7 +200,7 @@ function acceleration(m1: number, m2: number) {
   document
     .querySelector<HTMLInputElement>('#mass2-input')!
     .addEventListener('change', (e) => {
-      mass2 = Number((e.target as HTMLInputElement).value) / 10000;
+      mass2 = Number((e.target as HTMLInputElement).value) / 100;
       mass2Span.textContent = `${mass2} g`;
 
       acc = acceleration(mass1, mass2);
@@ -151,16 +210,26 @@ function acceleration(m1: number, m2: number) {
     if (simulationRunning) {
       if (weight2.getBounds().maxY > app.screen.height) {
         simulationRunning = false;
+
+        h = speed * speed / (2 * acc);
+
+        newG.innerHTML = `g: ${computeG(mass1, mass2, h, H, t)}`;
       }
 
-      speed += acc * deltaTime;
+      t += deltaTime / app.ticker.FPS;
 
-      const deltaY = speed * deltaTime;
-      h += deltaY;
-      sP.innerText = h.toFixed(2);
+      speed = acc * t;
 
-      drawWeight1(weight1, h);
-      drawWeight2(weight2, h);
+      const deltaY = speed * t;
+      H = deltaY;
+      sP.innerText = H.toFixed(2);
+
+      drawWeight1(weight1, H);
+      drawWeight2(weight2, H);
+
+      chart.data.labels?.push(H.toFixed(5)); // Add h to x-axis
+      chart.data.datasets[0].data.push((speed * speed).toFixed(2)); // Add v^2 to y-axis
+      chart.update();
     }
   });
 

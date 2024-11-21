@@ -7,7 +7,13 @@
     <title>Vite + TS</title>
   </head>
   <body>
-    <div id="canvas"></div>
+    <div class="container">
+      <div id="canvas" class="min"></div>
+
+      <div id="canvas" class="flex-end max">
+        <canvas id="chart"></canvas>
+      </div>
+    </div>
     <div>
       <div>
         <button id="start-btn">Start</button>
@@ -24,7 +30,7 @@
             max="10"
             step="1"
           />
-          <span id="mass1">0.01 g</span>
+          <span id="mass1">0.1 g</span>
         </div>
         <div>
           <label for="mass2-input"><i>M2</i></label>
@@ -36,9 +42,10 @@
             max="10"
             step="1"
           />
-          <span id="mass2">0.0001 g</span>
+          <span id="mass2">0.05 g</span>
         </div>
         <p id="s">0</p>
+        <p id="g"></p>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
